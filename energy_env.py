@@ -64,10 +64,10 @@ class HybridEnergyEnv:
     """
 
     # ── Reward weights (class-level constants) ────────────────────────────────
-    W_FUEL      = 2.0   # penalise diesel fuel consumption
-    W_BATTERY   = 5.0   # penalise SoC bound violations (battery stress)
-    W_LOAD      = 10.0  # penalise unmet load (reliability)
-    W_RENEWABLE = 3.0   # bonus for clean, fully-served operation
+    FUEL_WEIGHT     = 2.0   # penalise diesel fuel consumption
+    BATTERY_WEIGHT  = 5.0   # penalise SoC bound violations (battery stress)
+    LOAD_WEIGHT     = 10.0  # penalise unmet load (reliability)
+    RENEWABLE_WEIGHT = 3.0   # bonus for clean, fully-served operation
 
     # ─────────────────────────────────────────────────────────────────────────
     # Initialisation
@@ -301,10 +301,11 @@ class HybridEnergyEnv:
         # Renewable bonus: full load served AND no fuel burned this step
         renewable_bonus = 1.0 if (unmet_load <= 1e-6 and total_fuel <= 1e-9) else 0.0
 
-        fuel_penalty     = self.W_FUEL      * total_fuel
-        battery_penalty  = self.W_BATTERY   * batt_stress
-        load_penalty     = self.W_LOAD      * unmet_load
-        renewable_reward = self.W_RENEWABLE * renewable_bonus
+        fuel_penalty     = self.FUEL_WEIGHT     * total_fuel
+        battery_penalty  = self.BATTERY_WEIGHT  * batt_stress
+        load_penalty     = self.LOAD_WEIGHT     * unmet_load
+        renewable_reward = self.RENEWABLE_WEIGHT * renewable_bonus
+
 
         reward = -fuel_penalty - battery_penalty - load_penalty + renewable_reward
 
