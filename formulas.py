@@ -1,5 +1,5 @@
 """
-energy_env.py
+formulas.py
 =============
 Fully modular, source-agnostic off-grid hybrid renewable energy system
 simulation environment for Deep Q-Network (DQN) reinforcement learning.

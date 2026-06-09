@@ -264,9 +264,21 @@ if __name__ == "__main__":
     print(f"  Max  : {load_demand.max():.2f}")
     print(f"  Mean : {load_demand.mean():.2f}\n")
 
+    # ── Export to Excel ───────────────────────────────────────────────────────
+    time_index = _make_time_index()
+
+    df = pd.DataFrame({
+        "timestamp": time_index,
+        "solar_irradiance_W_per_m2": solar_irradiance,
+        "load_demand_kW": load_demand,
+    })
+
+    os.makedirs("data", exist_ok=True)
+    df.to_excel("data/funaab_energy_data.xlsx", index=False)
+    print("  Saved → data/funaab_energy_data.xlsx")
+
     # ── Plots ─────────────────────────────────────────────────────────────────
     print("Generating plots …")
-    time_index = _make_time_index()
     week_slice = _sample_week_slice(time_index, start="2024-01-08")
 
     _plot_series(

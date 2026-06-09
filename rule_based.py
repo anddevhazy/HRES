@@ -2,7 +2,7 @@
 rule_based.py
 =============
 Deterministic rule-based energy management controller for the modular hybrid
-energy system environment defined in energy_env.py.
+energy system environment defined in formulas.py.
 
 This controller serves as the **baseline benchmark** against which the DQN
 agent's performance is compared in Chapter 4.  It applies a fixed priority
@@ -256,9 +256,9 @@ if __name__ == "__main__":
 
     import matplotlib.pyplot as plt
     from data_generator import generate_data
-    from energy_env import HybridEnergyEnv
+    from formulas import HybridEnergyEnv
 
-    # ── Build FUNAAB configuration (mirrors energy_env.py test) ──────────────
+    # ── Build FUNAAB configuration (mirrors formulas.py test) ──────────────
     solar_irradiance, load_demand = generate_data()
 
     # Convert irradiance (W/m²) to availability fraction; peak ≈ 1000 W/m²
