@@ -1,0 +1,348 @@
+"""
+train.py
+========
+Main training script for the DQN agent on the FUNAAB hybrid energy system.
+
+Runs the full training loop, saves model checkpoints, persists metrics, and
+produces training-progress plots.
+"""
+
+import os
+import time
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")          # non-interactive backend — safe on headless machines
+import matplotlib.pyplot as plt
+
+from data_generator import generate_data
+from formulas import HybridEnergyEnv
+from dqn_agent import DQNAgent
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Training hyper-parameters
+# ─────────────────────────────────────────────────────────────────────────────
+
+# N_EPISODES        = 200   # total training episodes
+# TARGET_UPDATE_FREQ = 10   # hard-copy policy → target every N episodes
+# SAVE_EVERY         = 50   # checkpoint frequency (episodes)
+# PRINT_EVERY        = 10   # console log frequency (episodes)
+# MODEL_SAVE_DIR     = "models"
+# RESULTS_SAVE_DIR   = "results"
+
+
+N_EPISODES        = 50   # total training episodes
+TARGET_UPDATE_FREQ = 10   # hard-copy policy → target every N episodes
+SAVE_EVERY         = 10   # checkpoint frequency (episodes)
+PRINT_EVERY        = 10   # console log frequency (episodes)
+MODEL_SAVE_DIR     = "models"
+RESULTS_SAVE_DIR   = "results"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helper: moving average for plot smoothing
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _moving_average(values: np.ndarray, window: int = 20) -> np.ndarray:
+    """Pad-replicate the first element so the output length matches the input."""
+    if len(values) < window:
+        return values.copy()
+    kernel = np.ones(window) / window
+    padded = np.concatenate([np.full(window - 1, values[0]), values])
+    return np.convolve(padded, kernel, mode="valid")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helper: inline text progress bar
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _progress_bar(current: int, total: int, width: int = 30) -> str:
+    filled = int(width * current / total)
+    bar    = "█" * filled + "░" * (width - filled)
+    pct    = 100.0 * current / total
+    return f"[{bar}] {pct:5.1f}%  ep {current}/{total}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plot generation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _save_plots(
+    rewards:      np.ndarray,
+    fuels:        np.ndarray,
+    reliabilities: np.ndarray,
+    epsilons:     np.ndarray,
+    plots_dir:    str = "plots",
+) -> None:
+    os.makedirs(plots_dir, exist_ok=True)
+    episodes = np.arange(1, len(rewards) + 1)
+
+    # ── Plot 1: Reward convergence ────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(episodes, rewards, color="steelblue", alpha=0.4, linewidth=0.8,
+            label="Episode reward")
+    ax.plot(episodes, _moving_average(rewards), color="steelblue", linewidth=2.0,
+            label="Moving avg (20 ep)")
+    ax.set_title("Reward Convergence over Training")
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Total Reward")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(plots_dir, "training_reward.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved → {plots_dir}/training_reward.png")
+
+    # ── Plot 2: Fuel consumption ──────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(episodes, fuels, color="firebrick", alpha=0.4, linewidth=0.8,
+            label="Fuel (L)")
+    ax.plot(episodes, _moving_average(fuels), color="firebrick", linewidth=2.0,
+            label="Moving avg (20 ep)")
+    ax.set_title("Fuel Consumption over Training")
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Total Fuel Consumed (L)")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(plots_dir, "training_fuel.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved → {plots_dir}/training_fuel.png")
+
+    # ── Plot 3: Reliability index ─────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(episodes, reliabilities, color="seagreen", alpha=0.4, linewidth=0.8,
+            label="Reliability (%)")
+    ax.plot(episodes, _moving_average(reliabilities), color="seagreen", linewidth=2.0,
+            label="Moving avg (20 ep)")
+    ax.set_title("Reliability Index over Training")
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Reliability (%)")
+    ax.set_ylim(0, 105)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(plots_dir, "training_reliability.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved → {plots_dir}/training_reliability.png")
+
+    # ── Plot 4: Epsilon decay ─────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(episodes, epsilons, color="darkorchid", linewidth=1.5)
+    ax.set_title("Epsilon Decay over Training")
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Epsilon")
+    ax.set_ylim(0, 1.05)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(plots_dir, "training_epsilon.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved → {plots_dir}/training_epsilon.png")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FUNAAB environment configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_funaab_config() -> dict:
+    solar_irradiance, load_demand = generate_data()
+    solar_availability  = np.clip(solar_irradiance / 1000.0, 0.0, 1.0)
+    diesel_availability = np.ones(8760, dtype=np.float64)
+
+    return {
+        "sources": [
+            {
+                "name":                 "solar_pv",
+                "type":                 "renewable",
+                "rated_capacity_kw":    800.0,
+                "availability_profile": solar_availability,
+            },
+            {
+                "name":                 "diesel_generator",
+                "type":                 "controllable",
+                "rated_capacity_kw":    1000.0,
+                "fuel_coefficient_a":   0.084,
+                "fuel_coefficient_b":   0.246,
+                "availability_profile": diesel_availability,
+            },
+        ],
+        "batteries": [
+            {
+                "name":                  "bess_1",
+                "capacity_kwh":          3000.0,
+                "max_charge_rate_kw":    600.0,
+                "max_discharge_rate_kw": 600.0,
+                "charge_efficiency":     0.95,
+                "discharge_efficiency":  0.95,
+                "soc_min":               0.20,
+                "soc_max":               0.95,
+                "initial_soc":           0.50,
+            },
+        ],
+        "load_priorities": [
+            {"name": "critical",      "fraction": 0.20, "sheddable": False},
+            {"name": "essential",     "fraction": 0.50, "sheddable": True},
+            {"name": "non_essential", "fraction": 0.30, "sheddable": True},
+        ],
+        "load_profile": load_demand,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Training loop
+# ─────────────────────────────────────────────────────────────────────────────
+
+def train() -> None:
+    os.makedirs(MODEL_SAVE_DIR,   exist_ok=True)
+    os.makedirs(RESULTS_SAVE_DIR, exist_ok=True)
+    os.makedirs("plots",          exist_ok=True)
+
+    print("=" * 65)
+    print("  FUNAAB Hybrid Energy System — DQN Training")
+    print("=" * 65)
+    print(f"  Episodes         : {N_EPISODES}")
+    print(f"  Target update    : every {TARGET_UPDATE_FREQ} episodes")
+    print(f"  Checkpoint save  : every {SAVE_EVERY} episodes")
+    print("=" * 65)
+
+    # ── Build environment and agent ───────────────────────────────────────────
+    config = _build_funaab_config()
+    env    = HybridEnergyEnv(config)
+    agent  = DQNAgent(
+        state_size  = env.state_size,
+        action_size = env.action_size,
+    )
+
+    # ── Metric accumulators ───────────────────────────────────────────────────
+    all_rewards       = np.zeros(N_EPISODES, dtype=np.float64)
+    all_fuels         = np.zeros(N_EPISODES, dtype=np.float64)
+    all_reliabilities = np.zeros(N_EPISODES, dtype=np.float64)
+    all_shedding      = np.zeros(N_EPISODES, dtype=np.int64)
+    all_losses        = np.zeros(N_EPISODES, dtype=np.float64)
+    all_epsilons      = np.zeros(N_EPISODES, dtype=np.float64)
+
+    train_start = time.time()
+
+    # ── Episode loop ──────────────────────────────────────────────────────────
+    for ep in range(1, N_EPISODES + 1):
+        state          = env.reset()
+        total_reward   = 0.0
+        total_fuel     = 0.0
+        shedding_count = 0
+        served_steps   = 0
+        episode_losses = []
+
+        # ── Timestep loop ─────────────────────────────────────────────────────
+        for _ in range(env.n_timesteps):
+            action                      = agent.select_action(state)
+            next_state, reward, done, info = env.step(action)
+
+            agent.store_experience(state, action, reward, next_state, float(done))
+            loss = agent.train_step()
+            if loss is not None:
+                episode_losses.append(loss)
+
+            total_reward += reward
+            total_fuel   += sum(info["fuel_consumed_per_source"].values())
+            if info["load_shedding_occurred"]:
+                shedding_count += 1
+            else:
+                served_steps += 1
+
+            state = next_state
+            if done:
+                break
+
+        # ── End-of-episode bookkeeping ────────────────────────────────────────
+        agent.decay_epsilon()
+        agent._episode_count += 1
+        if agent._episode_count % TARGET_UPDATE_FREQ == 0:
+            agent.update_target_network()
+
+        mean_loss   = float(np.mean(episode_losses)) if episode_losses else 0.0
+        reliability = 100.0 * served_steps / env.n_timesteps
+
+        idx = ep - 1
+        all_rewards[idx]       = total_reward
+        all_fuels[idx]         = total_fuel
+        all_reliabilities[idx] = reliability
+        all_shedding[idx]      = shedding_count
+        all_losses[idx]        = mean_loss
+        all_epsilons[idx]      = agent.epsilon
+
+        # ── Checkpoint save ───────────────────────────────────────────────────
+        if ep % SAVE_EVERY == 0:
+            ckpt_path = os.path.join(MODEL_SAVE_DIR, f"checkpoint_ep{ep}.pth")
+            agent.save(ckpt_path)
+            print(f"  [checkpoint] Saved → {ckpt_path}")
+
+        # ── Progress print ────────────────────────────────────────────────────
+        if ep % PRINT_EVERY == 0:
+            bar = _progress_bar(ep, N_EPISODES)
+            print(
+                f"{bar} | "
+                f"Reward {total_reward:>10.1f} | "
+                f"Fuel {total_fuel:>8.1f} L | "
+                f"Rel {reliability:>6.2f}% | "
+                f"ε {agent.epsilon:.4f} | "
+                f"Loss {mean_loss:.5f}"
+            )
+
+    # ── Save final model ──────────────────────────────────────────────────────
+    final_path = os.path.join(MODEL_SAVE_DIR, "dqn_final.pth")
+    agent.save(final_path)
+    print(f"\n  Final model saved → {final_path}")
+
+    # ── Persist metrics ───────────────────────────────────────────────────────
+    metrics_path = os.path.join(RESULTS_SAVE_DIR, "training_metrics.npz")
+    np.savez(
+        metrics_path,
+        rewards       = all_rewards,
+        fuels         = all_fuels,
+        reliabilities = all_reliabilities,
+        shedding      = all_shedding,
+        losses        = all_losses,
+        epsilons      = all_epsilons,
+    )
+    print(f"  Metrics saved    → {metrics_path}")
+
+    # ── Generate and save plots ───────────────────────────────────────────────
+    print("\nGenerating training plots …")
+    _save_plots(all_rewards, all_fuels, all_reliabilities, all_epsilons)
+
+    # ── Total training time ───────────────────────────────────────────────────
+    elapsed   = time.time() - train_start
+    mins, sec = divmod(int(elapsed), 60)
+    hrs, mins = divmod(mins, 60)
+    print(f"\n  Total training time: {hrs:02d}h {mins:02d}m {sec:02d}s")
+
+    # ── Summary table: episode 1 vs final ────────────────────────────────────
+    print("\n" + "=" * 65)
+    print("  Training Summary: Episode 1  vs  Final Episode")
+    print("=" * 65)
+    header = f"  {'Metric':<28} {'Ep 1':>12} {'Ep ' + str(N_EPISODES):>12}  {'Change':>10}"
+    print(header)
+    print("  " + "-" * 63)
+
+    def _row(label, v1, v2, fmt=".2f", unit=""):
+        delta = v2 - v1
+        sign  = "+" if delta >= 0 else ""
+        print(f"  {label:<28} {v1:>12{fmt}} {v2:>12{fmt}}  {sign}{delta:>9{fmt}}{unit}")
+
+    _row("Total Reward",          all_rewards[0],       all_rewards[-1],       fmt=".1f")
+    _row("Fuel Consumed (L)",     all_fuels[0],         all_fuels[-1],         fmt=".1f")
+    _row("Reliability (%)",       all_reliabilities[0], all_reliabilities[-1], fmt=".2f")
+    _row("Load Shedding Events",  all_shedding[0],      all_shedding[-1],      fmt=".0f")
+    _row("Mean Loss",             all_losses[0],        all_losses[-1],        fmt=".5f")
+    _row("Epsilon",               all_epsilons[0],      all_epsilons[-1],      fmt=".4f")
+    print("=" * 65)
+    print("  Training complete.\n")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    train()
