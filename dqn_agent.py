@@ -240,54 +240,10 @@ class DQNAgent:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from data_generator import generate_data
-    from formulas import HybridEnergyEnv
-
-    # ── Build FUNAAB configuration ─────────────────────────────────────────────
-    solar_irradiance, load_demand = generate_data()
-    solar_availability  = np.clip(solar_irradiance / 1000.0, 0.0, 1.0)
-    diesel_availability = np.ones(8760, dtype=np.float64)
-
-    config_funaab = {
-        "sources": [
-            {
-                "name":                 "solar_pv",
-                "type":                 "renewable",
-                "rated_capacity_kw":    800.0,
-                "availability_profile": solar_availability,
-            },
-            {
-                "name":                 "diesel_generator",
-                "type":                 "controllable",
-                "rated_capacity_kw":    1000.0,
-                "fuel_coefficient_a":   0.084,
-                "fuel_coefficient_b":   0.246,
-                "availability_profile": diesel_availability,
-            },
-        ],
-        "batteries": [
-            {
-                "name":                  "bess_1",
-                "capacity_kwh":          3000.0,
-                "max_charge_rate_kw":    600.0,
-                "max_discharge_rate_kw": 600.0,
-                "charge_efficiency":     0.95,
-                "discharge_efficiency":  0.95,
-                "soc_min":               0.20,
-                "soc_max":               0.95,
-                "initial_soc":           0.50,
-            },
-        ],
-        "load_priorities": [
-            {"name": "critical",      "fraction": 0.20, "sheddable": False},
-            {"name": "essential",     "fraction": 0.50, "sheddable": True},
-            {"name": "non_essential", "fraction": 0.30, "sheddable": True},
-        ],
-        "load_profile": load_demand,
-    }
+    from formulas import GreenfieldEnergyEnv
 
     # ── Initialise environment and agent ───────────────────────────────────────
-    env   = HybridEnergyEnv(config_funaab)
+    env   = GreenfieldEnergyEnv()
     agent = DQNAgent(state_size=env.state_size, action_size=env.action_size)
 
     print("\nDQN Policy Network architecture:")
