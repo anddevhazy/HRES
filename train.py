@@ -1,7 +1,8 @@
 """
 train.py
 ========
-Main training script for the DQN agent on the FUNAAB hybrid energy system.
+Main training script for the DQN agent on the Greenfield University hybrid
+energy system.
 
 Runs the full training loop, saves model checkpoints, persists metrics, and
 produces training-progress plots.
@@ -15,8 +16,7 @@ import matplotlib
 matplotlib.use("Agg")          # non-interactive backend — safe on headless machines
 import matplotlib.pyplot as plt
 
-from data_generator import generate_data
-from formulas import HybridEnergyEnv
+from formulas import GreenfieldEnergyEnv
 from dqn_agent import DQNAgent
 
 
@@ -150,54 +150,6 @@ def _save_plots(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FUNAAB environment configuration
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _build_funaab_config() -> dict:
-    solar_irradiance, load_demand = generate_data()
-    solar_availability  = np.clip(solar_irradiance / 1000.0, 0.0, 1.0)
-    diesel_availability = np.ones(8760, dtype=np.float64)
-
-    return {
-        "sources": [
-            {
-                "name":                 "solar_pv",
-                "type":                 "renewable",
-                "rated_capacity_kw":    800.0,
-                "availability_profile": solar_availability,
-            },
-            {
-                "name":                 "diesel_generator",
-                "type":                 "controllable",
-                "rated_capacity_kw":    1000.0,
-                "fuel_coefficient_a":   0.084,
-                "fuel_coefficient_b":   0.246,
-                "availability_profile": diesel_availability,
-            },
-        ],
-        "batteries": [
-            {
-                "name":                  "bess_1",
-                "capacity_kwh":          3000.0,
-                "max_charge_rate_kw":    600.0,
-                "max_discharge_rate_kw": 600.0,
-                "charge_efficiency":     0.95,
-                "discharge_efficiency":  0.95,
-                "soc_min":               0.20,
-                "soc_max":               0.95,
-                "initial_soc":           0.50,
-            },
-        ],
-        "load_priorities": [
-            {"name": "critical",      "fraction": 0.20, "sheddable": False},
-            {"name": "essential",     "fraction": 0.50, "sheddable": True},
-            {"name": "non_essential", "fraction": 0.30, "sheddable": True},
-        ],
-        "load_profile": load_demand,
-    }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Training loop
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -207,7 +159,7 @@ def train() -> None:
     os.makedirs("plots",          exist_ok=True)
 
     print("=" * 65)
-    print("  FUNAAB Hybrid Energy System — DQN Training")
+    print("  Greenfield University — DQN Training")
     print("=" * 65)
     print(f"  Episodes         : {N_EPISODES}")
     print(f"  Target update    : every {TARGET_UPDATE_FREQ} episodes")
@@ -215,9 +167,8 @@ def train() -> None:
     print("=" * 65)
 
     # ── Build environment and agent ───────────────────────────────────────────
-    config = _build_funaab_config()
-    env    = HybridEnergyEnv(config)
-    agent  = DQNAgent(
+    env   = GreenfieldEnergyEnv()
+    agent = DQNAgent(
         state_size  = env.state_size,
         action_size = env.action_size,
     )
