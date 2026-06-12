@@ -64,10 +64,15 @@ class HybridEnergyEnv:
     """
 
     # ── Reward weights (class-level constants) ────────────────────────────────
-    FUEL_WEIGHT     = 2.0   # penalise diesel fuel consumption
-    BATTERY_WEIGHT  = 5.0   # penalise SoC bound violations (battery stress)
-    LOAD_WEIGHT     = 10.0  # penalise unmet load (reliability)
-    RENEWABLE_WEIGHT = 3.0   # bonus for clean, fully-served operation
+    # FUEL_WEIGHT     = 2.0   # penalise diesel fuel consumption
+    # BATTERY_WEIGHT  = 5.0   # penalise SoC bound violations (battery stress)
+    # LOAD_WEIGHT     = 10.0  # penalise unmet load (reliability)
+    # RENEWABLE_WEIGHT = 3.0   # bonus for clean, fully-served operation
+
+    FUEL_WEIGHT      = 1.0    # was 2.0 — reduce fuel pressure
+    BATTERY_WEIGHT   = 3.0    # was 5.0
+    LOAD_WEIGHT      = 20.0   # was 10.0 — double reliability pressure
+    RENEWABLE_WEIGHT = 2.0    # was 3.0
 
     # ─────────────────────────────────────────────────────────────────────────
     # Initialisation
