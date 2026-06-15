@@ -102,10 +102,13 @@ class GreenfieldEnergyEnv:
     }
 
     # ── Reward weights ────────────────────────────────────────────────────────
-    FUEL_WEIGHT      = 1.0
-    BATTERY_WEIGHT   = 3.0
-    LOAD_WEIGHT      = 20.0
-    RENEWABLE_WEIGHT = 2.0
+    # Scaled so per-step rewards stay in roughly [-5, +1] rather than
+    # [-thousands], which prevents gradient explosion in the Q-network.
+    # LOAD_WEIGHT dominates to make reliability the primary objective.
+    FUEL_WEIGHT      = 0.005   # per litre — marginal cost signal
+    BATTERY_WEIGHT   = 0.05    # SOC bound violation discouraged
+    LOAD_WEIGHT      = 1.0     # per kW unmet — reliability is the priority
+    RENEWABLE_WEIGHT = 0.5     # bonus for zero-fuel zero-shed steps
 
     # ── Action map (6 actions) ────────────────────────────────────────────────
     # action index = diesel_on * 3 + batt_mode

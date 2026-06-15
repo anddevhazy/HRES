@@ -130,7 +130,7 @@ class DQNAgent:
         self.target_net.eval()         # target network is never trained directly
 
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
-        self.loss_fn   = nn.MSELoss()
+        self.loss_fn   = nn.SmoothL1Loss()   # Huber loss — robust to large Q-value outliers
 
         # Experience replay buffer (Lin 1992)
         self.replay_buffer = ReplayBuffer(capacity=buffer_capacity)
@@ -203,6 +203,7 @@ class DQNAgent:
 
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=10.0)
         self.optimizer.step()
 
         return float(loss.item())

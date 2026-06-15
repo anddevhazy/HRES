@@ -10,49 +10,49 @@
       "id": "LP1",
       "name": "Admin Block",
       "priority": 1,
-      "base_kw": 45
+      "base_kw": 54.9
     },
     {
       "id": "LP2",
       "name": "Lecture Halls",
       "priority": 2,
-      "base_kw": 80
+      "base_kw": 97.6
     },
     {
       "id": "LP3",
       "name": "Research Labs",
       "priority": 3,
-      "base_kw": 60
+      "base_kw": 73.2
     },
     {
       "id": "LP4",
       "name": "Student Hostels",
       "priority": 4,
-      "base_kw": 70
+      "base_kw": 85.4
     },
     {
       "id": "LP5",
       "name": "Library",
       "priority": 5,
-      "base_kw": 30
+      "base_kw": 36.6
     },
     {
       "id": "LP6",
       "name": "Cafeteria",
       "priority": 6,
-      "base_kw": 35
+      "base_kw": 42.7
     },
     {
       "id": "LP7",
       "name": "Sports Complex",
       "priority": 7,
-      "base_kw": 25
+      "base_kw": 30.5
     },
     {
       "id": "LP8",
       "name": "Street Lighting",
       "priority": 8,
-      "base_kw": 15
+      "base_kw": 18.3
     }
   ],
   "n_sources": 3,
@@ -68,8 +68,7 @@
       "fuel": "diesel",
       "fuel_cost": true,
       "full_load_fuel_consumption_L_per_hr": 40.0,
-      "min_load_fraction": 0.25,
-      "note": "Dispatched only when solar + battery cannot meet priority loads"
+      "min_load_fraction": 0.25
     },
     "battery": {
       "capacity_kwh": 1200,
@@ -82,71 +81,63 @@
       "fuel_cost": false
     }
   },
+  "controller_type": "Weak rule-based (5 documented flaws)",
   "controller_rules": [
     {
       "rule_id": "R1",
       "name": "Solar-first dispatch",
-      "description": "Solar PV output is always used first to serve active loads and charge the battery. It is never curtailed unless the battery is full and all loads are met."
+      "description": "Solar PV output is the primary source. It is always used first."
     },
     {
       "rule_id": "R2",
-      "name": "Priority dispatch order (day)",
-      "description": "During daytime (07:00\u201317:59): LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7. LP8 is inactive in daylight."
+      "name": "[FLAW F1] Battery pre-charge bias",
+      "description": "The controller diverts 10% of solar output to charge the battery BEFORE serving any load. This reduces power available to loads during daylight and causes unnecessary shedding."
     },
     {
       "rule_id": "R3",
-      "name": "Priority dispatch order (night)",
-      "description": "During night (18:00\u201306:59): LP1 > LP8 > LP4 > LP2 > LP3 > LP5 > LP6 > LP7. LP8 elevated for campus safety."
+      "name": "[FLAW F2] Late diesel trigger",
+      "description": "The diesel generator only starts when battery SOC \u2264 125 kWh (just above the 120 kWh hard floor) AND solar output < 10 kW. This is far too late \u2014 by the time these conditions are met, most loads have already been shed for hours."
     },
     {
       "rule_id": "R4",
-      "name": "Load shedding threshold",
-      "description": "LP2\u2013LP7 are served only if at least 50% of their current demand can be met. LP1 and LP8 have a 0% threshold (always served if any power available)."
+      "name": "[FLAW F3] High load-shedding threshold",
+      "description": "A load point is only served if the available power covers at least 80% of its current demand. This causes aggressive shedding even when modest additional power (e.g. earlier diesel dispatch) could have served the load."
     },
     {
       "rule_id": "R5",
-      "name": "Battery charges on surplus",
-      "description": "If solar output exceeds total eligible load demand AND SOC < 90% (1,080 kWh), surplus charges the battery at up to 200 kW (90% round-trip efficiency)."
+      "name": "[FLAW F4] No night priority reordering",
+      "description": "The dispatch order (LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7 > LP8) is the same day and night. LP8 (Street Lighting) is always last priority, causing campus safety lighting to go unserved even when enough power is available."
     },
     {
       "rule_id": "R6",
-      "name": "Battery discharges on deficit",
-      "description": "If solar output < total eligible load demand AND SOC > 10% (120 kWh), battery discharges at up to 200 kW to cover the shortfall before diesel is considered."
+      "name": "[FLAW F5] Diesel always dispatched at full capacity",
+      "description": "When the diesel starts, it always runs at full 150 kW regardless of the actual shortfall. This wastes fuel and causes battery overcharge (surplus cannot always be absorbed), leading to inefficient operation."
     },
     {
       "rule_id": "R7",
-      "name": "Diesel start condition",
-      "description": "Diesel generator starts if: (a) solar + battery discharge cannot cover the combined demand of priority loads LP1\u2013LP4, OR (b) battery SOC < 240 kWh (20%) and solar output < 30 kW. Diesel is not started for non-priority loads (LP5\u2013LP8) alone."
+      "name": "Battery discharge",
+      "description": "Battery discharges to cover the deficit between solar output (after pre-charge) and total load demand, up to 200 kW and down to 120 kWh SOC floor."
     },
     {
       "rule_id": "R8",
-      "name": "Diesel output sizing",
-      "description": "When started, the diesel generator is dispatched to cover the exact shortfall, subject to a minimum loading of 25% (37.5 kW) and a maximum of 150 kW."
-    },
-    {
-      "rule_id": "R9",
-      "name": "Diesel fuel cost accounting",
-      "description": "Fuel consumption (litres/hr) follows a linear derating model: L = L_idle + (L_full - L_idle) \u00d7 (P / P_max), where L_idle = 10 L/hr (25% of full-load rate). Fuel price (NGN/litre) varies hourly with seasonal trends and supply shocks."
-    },
-    {
-      "rule_id": "R10",
       "name": "Time-window restrictions",
       "description": "LP5 (Library): 08:00\u201322:00. LP6 (Cafeteria): 06:00\u201321:00. LP7 (Sports): 06:00\u201320:00. LP8 (Street Lighting): 18:00\u201306:00."
-    },
-    {
-      "rule_id": "R11",
-      "name": "Emergency battery protection",
-      "description": "If SOC < 240 kWh (20%) AND solar output < 30 kW, LP7 (Sports Complex) is immediately shed. LP8 (Street Lighting) is exempt from emergency shedding as it is safety infrastructure."
     }
   ],
+  "reliability_metric": "Energy served / Energy demanded (annual)",
+  "baseline_reliability_pct": 70.51,
+  "total_annual_demand_kwh": 1880819.8,
+  "total_annual_delivered_kwh": 1326248.2,
+  "total_unserved_energy_kwh": 554571.6,
+  "dqn_target_reliability_pct": 90.0,
   "dataset_info": {
     "total_hours": 8760,
     "year": 2024,
     "timestep": "hourly",
     "files": {
-      "source_availability.csv": "8,760 rows \u00d7 19 columns. Solar PV output, diesel availability/dispatch/fuel/cost, battery SOC/charge/discharge, total generation and available power.",
-      "load_demand_and_dispatch.csv": "8,760 rows \u00d7 28 columns. For each LP (LP1\u2013LP8): _powered (0/1), _demand_kw (unconstrained), _effective_kw (actual served).",
-      "university_metadata.json": "University profile, load point specs, source specs, controller rules."
+      "source_availability.csv": "8,760 rows \u00d7 19 cols. Solar, diesel, battery, fuel cost.",
+      "load_demand_and_dispatch.csv": "8,760 rows \u00d7 28 cols. Per-LP powered/demand/effective.",
+      "university_metadata.json": "Full spec, load points, sources, controller rules, reliability."
     }
   }
 }

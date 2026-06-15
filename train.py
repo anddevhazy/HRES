@@ -40,7 +40,7 @@ from dqn_agent import DQNAgent
 # RESULTS_SAVE_DIR   = "results"
 
 
-N_EPISODES        = 200   # total training episodes
+N_EPISODES        = 50   # total training episodes
 TARGET_UPDATE_FREQ = 10   # hard-copy policy → target every N episodes
 SAVE_EVERY         = 50   # checkpoint frequency (episodes)
 PRINT_EVERY        = 10   # console log frequency (episodes)
@@ -185,12 +185,13 @@ def train() -> None:
 
     # ── Episode loop ──────────────────────────────────────────────────────────
     for ep in range(1, N_EPISODES + 1):
-        state          = env.reset()
-        total_reward   = 0.0
-        total_fuel     = 0.0
-        shedding_count = 0
-        served_steps   = 0
-        episode_losses = []
+        state            = env.reset()
+        total_reward     = 0.0
+        total_fuel       = 0.0
+        shedding_count   = 0
+        total_demand_kw  = 0.0
+        total_served_kw  = 0.0
+        episode_losses   = []
 
         # ── Timestep loop ─────────────────────────────────────────────────────
         for _ in range(env.n_timesteps):
@@ -202,12 +203,12 @@ def train() -> None:
             if loss is not None:
                 episode_losses.append(loss)
 
-            total_reward += reward
-            total_fuel   += sum(info["fuel_consumed_per_source"].values())
+            total_reward    += reward
+            total_fuel      += sum(info["fuel_consumed_per_source"].values())
+            total_demand_kw += info["total_demand_kw"]
+            total_served_kw += info["load_served_kw"]
             if info["load_shedding_occurred"]:
                 shedding_count += 1
-            else:
-                served_steps += 1
 
             state = next_state
             if done:
@@ -220,7 +221,10 @@ def train() -> None:
             agent.update_target_network()
 
         mean_loss   = float(np.mean(episode_losses)) if episode_losses else 0.0
-        reliability = 100.0 * served_steps / env.n_timesteps
+        # Energy-based reliability: fraction of demanded kWh actually served
+        # This matches how the 70.51% baseline was defined in the dataset
+        reliability = (100.0 * total_served_kw / total_demand_kw
+                       if total_demand_kw > 0 else 0.0)
 
         idx = ep - 1
         all_rewards[idx]       = total_reward
@@ -291,7 +295,7 @@ def train() -> None:
 
     _row("Total Reward",          all_rewards[0],       all_rewards[-1],       fmt=".1f")
     _row("Fuel Consumed (L)",     all_fuels[0],         all_fuels[-1],         fmt=".1f")
-    _row("Reliability (%)",       all_reliabilities[0], all_reliabilities[-1], fmt=".2f")
+    _row("Reliability % (energy)", all_reliabilities[0], all_reliabilities[-1], fmt=".2f")
     _row("Load Shedding Events",  all_shedding[0],      all_shedding[-1],      fmt=".0f")
     _row("Mean Loss",             all_losses[0],        all_losses[-1],        fmt=".5f")
     _row("Epsilon",               all_epsilons[0],      all_epsilons[-1],      fmt=".4f")
