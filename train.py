@@ -40,7 +40,7 @@ from dqn_agent import DQNAgent
 # RESULTS_SAVE_DIR   = "results"
 
 
-N_EPISODES        = 50   # total training episodes
+N_EPISODES        = 500   # total training episodes
 TARGET_UPDATE_FREQ = 10   # hard-copy policy → target every N episodes
 SAVE_EVERY         = 50   # checkpoint frequency (episodes)
 PRINT_EVERY        = 10   # console log frequency (episodes)
