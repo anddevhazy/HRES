@@ -34,7 +34,7 @@ import torch
 
 from formulas import GreenfieldEnergyEnv
 from dqn_agent import DQNAgent
-from rule_based import GreenfieldRuleBasedController
+from weak_rule_based import WeakGreenfieldEnv, WeakRuleBasedController
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -329,6 +329,7 @@ def main():
     if not os.path.exists(args.model):
         raise FileNotFoundError(f"Model not found: {args.model}")
 
+    # DQN runs in the standard environment
     env = GreenfieldEnergyEnv()
 
     # ── Load DQN ──────────────────────────────────────────────────────────────
@@ -346,11 +347,14 @@ def main():
         lambda state, env: agent.select_action(state)
     )
 
-    print("[2/3] Rule-based controller …")
-    controller = GreenfieldRuleBasedController(env)
+    # Rule-based baseline runs in the weak environment (conventional constraints)
+    weak_env = WeakGreenfieldEnv()
+    weak_controller = WeakRuleBasedController(weak_env)
+
+    print("[2/3] Conventional rule-based controller …")
     rule_results = run_episode(
-        env,
-        lambda state, env: controller.select_action(state, env)
+        weak_env,
+        lambda state, env: weak_controller.select_action(state, env)
     )
 
     print("[3/3] MAX SUPPLY (hardware ceiling) …")
@@ -361,7 +365,7 @@ def main():
 
     # ── Save plots ────────────────────────────────────────────────────────────
     print("Saving plots …")
-    save_plots(dqn_results, rule_results, ceiling_results, env, args.plots_dir)
+    save_plots(dqn_results, rule_results, ceiling_results, weak_env, args.plots_dir)
     print(f"\n  Done. All plots written to {args.plots_dir}/\n")
 
 
