@@ -183,13 +183,14 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
 
     # ── Plot 1: Reliability comparison bar chart ──────────────────────────────
     fig, ax = plt.subplots(figsize=(8, 5))
-    labels  = ["Weak Rule-Based\n(baseline)", "DQN Agent\n(this work)",
-               "MAX SUPPLY\n(hardware ceiling)"]
-    values  = [rule["energy_reliability"], dqn["energy_reliability"],
-               ceiling["energy_reliability"]]
-    colors  = ["#e07b54", "#4c9be8", "#aaaaaa"]
-    bars    = ax.bar(labels, values, color=colors, width=0.5, edgecolor="white",
-                     linewidth=1.2)
+    
+    # REMOVED MAX SUPPLY FROM LABELS, VALUES, AND COLORS
+    labels  = ["Weak Rule-Based\n(baseline)", "DQN Agent\n(this work)"]
+    values  = [rule["energy_reliability"], dqn["energy_reliability"]]
+    colors  = ["#e07b54", "#4c9be8"]
+    
+    bars    = ax.bar(labels, values, color=colors, width=0.4, edgecolor="white",
+                     linewidth=1.2) # slightly narrowed width from 0.5 to 0.4 for aesthetics
 
     for bar, val in zip(bars, values):
         ax.text(bar.get_x() + bar.get_width() / 2,
@@ -199,7 +200,7 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
     ax.axhline(90, color="green", linestyle="--", linewidth=1.2,
                label="90% target", alpha=0.7)
     ax.set_ylabel("Energy Reliability (%)")
-    ax.set_title("Energy Reliability: DQN vs Baselines")
+    ax.set_title("Energy Reliability: DQN vs Baseline")
     ax.set_ylim(60, 95)
     ax.legend(fontsize=9)
     ax.grid(True, axis="y", alpha=0.3, linewidth=0.5)
