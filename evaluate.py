@@ -1,28 +1,3 @@
-"""
-evaluate.py
-===========
-Post-training evaluation for the Greenfield University DQN agent.
-
-Runs three policies over the full 8,760-hour year and produces a
-side-by-side comparison table plus publication-quality plots.
-
-Policies compared
------------------
-  1. DQN agent          — loads models/dqn_final.pth (or a specified checkpoint)
-  2. Rule-based          — GreenfieldRuleBasedController (deterministic baseline)
-  3. MAX SUPPLY          — action 5 every step (hardware ceiling reference)
-
-Reliability definition
------------------------
-  Energy-based: total_kWh_served / total_kWh_demanded  × 100
-  This matches the 70.51% figure in the dataset metadata.
-
-Usage
------
-  python evaluate.py                          # uses dqn_final.pth
-  python evaluate.py --model models/checkpoint_ep300.pth
-"""
-
 import os
 import argparse
 
@@ -37,15 +12,7 @@ from dqn_agent import DQNAgent
 from weak_rule_based import WeakGreenfieldEnv, WeakRuleBasedController
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Episode runner
-# ─────────────────────────────────────────────────────────────────────────────
-
 def run_episode(env: GreenfieldEnergyEnv, policy_fn) -> dict:
-    """
-    Simulate one full year with policy_fn(state, env) → action int.
-    Returns a dict of per-step arrays and aggregate scalars.
-    """
     state = env.reset()
     done  = False
 
@@ -117,10 +84,6 @@ def run_episode(env: GreenfieldEnergyEnv, policy_fn) -> dict:
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Console reporting
-# ─────────────────────────────────────────────────────────────────────────────
-
 def print_comparison(dqn: dict, rule: dict, ceiling: dict) -> None:
     print("\n" + "=" * 72)
     print("  Evaluation Results — DQN vs Rule-Based vs Hardware Ceiling")
@@ -149,7 +112,6 @@ def print_comparison(dqn: dict, rule: dict, ceiling: dict) -> None:
 
     print("=" * 72)
 
-    # ── DQN vs Rule-Based delta ───────────────────────────────────────────────
     rel_gain   = dqn["energy_reliability"] - rule["energy_reliability"]
     fuel_delta = dqn["total_fuel_L"] - rule["total_fuel_L"]
     unmet_red  = rule["total_unmet_kwh"] - dqn["total_unmet_kwh"]
@@ -172,25 +134,19 @@ def print_comparison(dqn: dict, rule: dict, ceiling: dict) -> None:
     print()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Plots
-# ─────────────────────────────────────────────────────────────────────────────
-
 def save_plots(dqn: dict, rule: dict, ceiling: dict,
                env: GreenfieldEnergyEnv, plots_dir: str = "plots") -> None:
     os.makedirs(plots_dir, exist_ok=True)
     hours = np.arange(dqn["n_timesteps"])
 
-    # ── Plot 1: Reliability comparison bar chart ──────────────────────────────
     fig, ax = plt.subplots(figsize=(8, 5))
-    
-    # REMOVED MAX SUPPLY FROM LABELS, VALUES, AND COLORS
+
     labels  = ["Weak Rule-Based\n(baseline)", "DQN Agent\n(this work)"]
     values  = [rule["energy_reliability"], dqn["energy_reliability"]]
     colors  = ["#e07b54", "#4c9be8"]
-    
+
     bars    = ax.bar(labels, values, color=colors, width=0.4, edgecolor="white",
-                     linewidth=1.2) # slightly narrowed width from 0.5 to 0.4 for aesthetics
+                     linewidth=1.2)
 
     for bar, val in zip(bars, values):
         ax.text(bar.get_x() + bar.get_width() / 2,
@@ -210,7 +166,6 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
     plt.close(fig)
     print(f"  Saved → {path}")
 
-    # ── Plot 2: Hourly unmet load — DQN vs Rule-Based (full year) ────────────
     fig, axes = plt.subplots(2, 1, figsize=(16, 7), sharex=True)
 
     axes[0].fill_between(hours, rule["unmet_hist"], alpha=0.6,
@@ -238,7 +193,6 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
     plt.close(fig)
     print(f"  Saved → {path}")
 
-    # ── Plot 3: Battery SOC — DQN vs Rule-Based ───────────────────────────────
     fig, ax = plt.subplots(figsize=(16, 4))
     ax.plot(hours, dqn["soc_hist"],  color="#4c9be8", linewidth=0.6,
             alpha=0.85, label="DQN SOC (kWh)")
@@ -260,8 +214,7 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
     plt.close(fig)
     print(f"  Saved → {path}")
 
-    # ── Plot 4: Two-week detail — power balance DQN vs Rule-Based ────────────
-    window = 336   # 14 days
+    window = 336
     fig, axes = plt.subplots(2, 1, figsize=(16, 8), sharex=True)
     hrs = np.arange(window)
 
@@ -279,7 +232,6 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
                         alpha=0.4, color="steelblue", label="Diesel")
         ax.fill_between(hrs, res["served_hist"][:window],
                         alpha=0.0)
-        # Shade shedding hours
         for t in range(window):
             if res["shed_mask"][t]:
                 ax.axvspan(t, t + 1, color="red", alpha=0.15, linewidth=0)
@@ -295,7 +247,6 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
     plt.close(fig)
     print(f"  Saved → {path}")
 
-    # ── Plot 5: Hourly fuel — DQN vs Rule-Based ───────────────────────────────
     fig, ax = plt.subplots(figsize=(16, 4))
     ax.plot(hours, np.cumsum(rule["fuel_hist"]),
             color="#e07b54", linewidth=1.0, label=f"Rule-Based cumulative fuel  "
@@ -315,10 +266,6 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
     print(f"  Saved → {path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main
-# ─────────────────────────────────────────────────────────────────────────────
-
 def main():
     parser = argparse.ArgumentParser(description="Evaluate trained DQN agent.")
     parser.add_argument("--model", default="models/dqn_final.pth",
@@ -330,25 +277,21 @@ def main():
     if not os.path.exists(args.model):
         raise FileNotFoundError(f"Model not found: {args.model}")
 
-    # DQN runs in the standard environment
     env = GreenfieldEnergyEnv()
 
-    # ── Load DQN ──────────────────────────────────────────────────────────────
     agent = DQNAgent(state_size=env.state_size, action_size=env.action_size)
     agent.load(args.model)
-    agent.epsilon = 0.0   # greedy — no exploration during evaluation
+    agent.epsilon = 0.0
 
     print(f"\n  Model loaded: {args.model}")
     print(f"  Evaluating over {env.n_timesteps} timesteps (full year) …\n")
 
-    # ── Run all three policies ────────────────────────────────────────────────
     print("[1/3] DQN agent …")
     dqn_results = run_episode(
         env,
         lambda state, env: agent.select_action(state)
     )
 
-    # Rule-based baseline runs in the weak environment (conventional constraints)
     weak_env = WeakGreenfieldEnv()
     weak_controller = WeakRuleBasedController(weak_env)
 
@@ -361,10 +304,8 @@ def main():
     print("[3/3] MAX SUPPLY (hardware ceiling) …")
     ceiling_results = run_episode(env, lambda state, env: 5)
 
-    # ── Print results ─────────────────────────────────────────────────────────
     print_comparison(dqn_results, rule_results, ceiling_results)
 
-    # ── Save plots ────────────────────────────────────────────────────────────
     print("Saving plots …")
     save_plots(dqn_results, rule_results, ceiling_results, weak_env, args.plots_dir)
     print(f"\n  Done. All plots written to {args.plots_dir}/\n")
@@ -372,3 +313,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

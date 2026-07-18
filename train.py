@@ -1,59 +1,24 @@
-"""
-train.py
-========
-Main training script for the DQN agent on the Greenfield University hybrid
-energy system.
-
-Runs the full training loop, saves model checkpoints, persists metrics, and
-produces training-progress plots.
-"""
-
 import os
 import time
 
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")          # non-interactive backend — safe on headless machines
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from formulas import GreenfieldEnergyEnv
 from dqn_agent import DQNAgent
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Training hyper-parameters
-# ─────────────────────────────────────────────────────────────────────────────
-
-# N_EPISODES        = 200   # total training episodes
-# TARGET_UPDATE_FREQ = 10   # hard-copy policy → target every N episodes
-# SAVE_EVERY         = 50   # checkpoint frequency (episodes)
-# PRINT_EVERY        = 10   # console log frequency (episodes)
-# MODEL_SAVE_DIR     = "models"
-# RESULTS_SAVE_DIR   = "results"
-
-
-# N_EPISODES        = 50   # total training episodes
-# TARGET_UPDATE_FREQ = 10   # hard-copy policy → target every N episodes
-# SAVE_EVERY         = 10   # checkpoint frequency (episodes)
-# PRINT_EVERY        = 10   # console log frequency (episodes)
-# MODEL_SAVE_DIR     = "models"
-# RESULTS_SAVE_DIR   = "results"
-
-
-N_EPISODES        = 500   # total training episodes
-TARGET_UPDATE_FREQ = 10   # hard-copy policy → target every N episodes
-SAVE_EVERY         = 50   # checkpoint frequency (episodes)
-PRINT_EVERY        = 10   # console log frequency (episodes)
+N_EPISODES        = 500
+TARGET_UPDATE_FREQ = 10
+SAVE_EVERY         = 50
+PRINT_EVERY        = 10
 MODEL_SAVE_DIR     = "models"
 RESULTS_SAVE_DIR   = "results"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Helper: moving average for plot smoothing
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _moving_average(values: np.ndarray, window: int = 20) -> np.ndarray:
-    """Pad-replicate the first element so the output length matches the input."""
     if len(values) < window:
         return values.copy()
     kernel = np.ones(window) / window
@@ -61,20 +26,12 @@ def _moving_average(values: np.ndarray, window: int = 20) -> np.ndarray:
     return np.convolve(padded, kernel, mode="valid")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Helper: inline text progress bar
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _progress_bar(current: int, total: int, width: int = 30) -> str:
     filled = int(width * current / total)
     bar    = "█" * filled + "░" * (width - filled)
     pct    = 100.0 * current / total
     return f"[{bar}] {pct:5.1f}%  ep {current}/{total}"
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Plot generation
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _save_plots(
     rewards:      np.ndarray,
@@ -86,7 +43,6 @@ def _save_plots(
     os.makedirs(plots_dir, exist_ok=True)
     episodes = np.arange(1, len(rewards) + 1)
 
-    # ── Plot 1: Reward convergence ────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(episodes, rewards, color="steelblue", alpha=0.4, linewidth=0.8,
             label="Episode reward")
@@ -102,7 +58,6 @@ def _save_plots(
     plt.close(fig)
     print(f"  Saved → {plots_dir}/training_reward.png")
 
-    # ── Plot 2: Fuel consumption ──────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(episodes, fuels, color="firebrick", alpha=0.4, linewidth=0.8,
             label="Fuel (L)")
@@ -118,7 +73,6 @@ def _save_plots(
     plt.close(fig)
     print(f"  Saved → {plots_dir}/training_fuel.png")
 
-    # ── Plot 3: Reliability index ─────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(episodes, reliabilities, color="seagreen", alpha=0.4, linewidth=0.8,
             label="Reliability (%)")
@@ -135,7 +89,6 @@ def _save_plots(
     plt.close(fig)
     print(f"  Saved → {plots_dir}/training_reliability.png")
 
-    # ── Plot 4: Epsilon decay ─────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(episodes, epsilons, color="darkorchid", linewidth=1.5)
     ax.set_title("Epsilon Decay over Training")
@@ -148,10 +101,6 @@ def _save_plots(
     plt.close(fig)
     print(f"  Saved → {plots_dir}/training_epsilon.png")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Training loop
-# ─────────────────────────────────────────────────────────────────────────────
 
 def train() -> None:
     os.makedirs(MODEL_SAVE_DIR,   exist_ok=True)
@@ -166,14 +115,12 @@ def train() -> None:
     print(f"  Checkpoint save  : every {SAVE_EVERY} episodes")
     print("=" * 65)
 
-    # ── Build environment and agent ───────────────────────────────────────────
     env   = GreenfieldEnergyEnv()
     agent = DQNAgent(
         state_size  = env.state_size,
         action_size = env.action_size,
     )
 
-    # ── Metric accumulators ───────────────────────────────────────────────────
     all_rewards       = np.zeros(N_EPISODES, dtype=np.float64)
     all_fuels         = np.zeros(N_EPISODES, dtype=np.float64)
     all_reliabilities = np.zeros(N_EPISODES, dtype=np.float64)
@@ -183,7 +130,6 @@ def train() -> None:
 
     train_start = time.time()
 
-    # ── Episode loop ──────────────────────────────────────────────────────────
     for ep in range(1, N_EPISODES + 1):
         state            = env.reset()
         total_reward     = 0.0
@@ -193,7 +139,6 @@ def train() -> None:
         total_served_kw  = 0.0
         episode_losses   = []
 
-        # ── Timestep loop ─────────────────────────────────────────────────────
         for _ in range(env.n_timesteps):
             action                      = agent.select_action(state)
             next_state, reward, done, info = env.step(action)
@@ -214,15 +159,12 @@ def train() -> None:
             if done:
                 break
 
-        # ── End-of-episode bookkeeping ────────────────────────────────────────
         agent.decay_epsilon()
         agent._episode_count += 1
         if agent._episode_count % TARGET_UPDATE_FREQ == 0:
             agent.update_target_network()
 
         mean_loss   = float(np.mean(episode_losses)) if episode_losses else 0.0
-        # Energy-based reliability: fraction of demanded kWh actually served
-        # This matches how the 70.51% baseline was defined in the dataset
         reliability = (100.0 * total_served_kw / total_demand_kw
                        if total_demand_kw > 0 else 0.0)
 
@@ -234,13 +176,11 @@ def train() -> None:
         all_losses[idx]        = mean_loss
         all_epsilons[idx]      = agent.epsilon
 
-        # ── Checkpoint save ───────────────────────────────────────────────────
         if ep % SAVE_EVERY == 0:
             ckpt_path = os.path.join(MODEL_SAVE_DIR, f"checkpoint_ep{ep}.pth")
             agent.save(ckpt_path)
             print(f"  [checkpoint] Saved → {ckpt_path}")
 
-        # ── Progress print ────────────────────────────────────────────────────
         if ep % PRINT_EVERY == 0:
             bar = _progress_bar(ep, N_EPISODES)
             print(
@@ -252,12 +192,10 @@ def train() -> None:
                 f"Loss {mean_loss:.5f}"
             )
 
-    # ── Save final model ──────────────────────────────────────────────────────
     final_path = os.path.join(MODEL_SAVE_DIR, "dqn_final.pth")
     agent.save(final_path)
     print(f"\n  Final model saved → {final_path}")
 
-    # ── Persist metrics ───────────────────────────────────────────────────────
     metrics_path = os.path.join(RESULTS_SAVE_DIR, "training_metrics.npz")
     np.savez(
         metrics_path,
@@ -270,17 +208,14 @@ def train() -> None:
     )
     print(f"  Metrics saved    → {metrics_path}")
 
-    # ── Generate and save plots ───────────────────────────────────────────────
     print("\nGenerating training plots …")
     _save_plots(all_rewards, all_fuels, all_reliabilities, all_epsilons)
 
-    # ── Total training time ───────────────────────────────────────────────────
     elapsed   = time.time() - train_start
     mins, sec = divmod(int(elapsed), 60)
     hrs, mins = divmod(mins, 60)
     print(f"\n  Total training time: {hrs:02d}h {mins:02d}m {sec:02d}s")
 
-    # ── Summary table: episode 1 vs final ────────────────────────────────────
     print("\n" + "=" * 65)
     print("  Training Summary: Episode 1  vs  Final Episode")
     print("=" * 65)
@@ -303,9 +238,6 @@ def train() -> None:
     print("  Training complete.\n")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Entry point
-# ─────────────────────────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
     train()
+
