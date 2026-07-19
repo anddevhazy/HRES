@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_DEFAULT_DATA_DIR = os.path.join(_HERE, "data", "Greenfield", "data")
+_DEFAULT_DATA_DIR = os.path.join(_HERE, "data")
 
 
 class GreenfieldEnergyEnv:
@@ -74,7 +74,7 @@ class GreenfieldEnergyEnv:
 
     @property
     def state_size(self) -> int:
-        return 13
+        return 14
 
     @property
     def action_size(self) -> int:
@@ -197,15 +197,15 @@ class GreenfieldEnergyEnv:
                       else np.zeros(self.state_size, dtype=np.float64))
         return next_state, reward, done, info
 
-
     def _get_state(self) -> np.ndarray:
         t = self.t
 
-        solar_frac = float(self.solar_output_kw[t]) / self.SOLAR_CAPACITY_KW
-        soc_norm   = ((self.battery_soc_kwh - self.BATTERY_MIN_SOC_KWH)
-                      / (self.BATTERY_MAX_SOC_KWH - self.BATTERY_MIN_SOC_KWH))
-        hour_norm  = float(self.hour_of_day[t]) / 23.0
-        weekday    = float(self.is_weekday[t])
+        solar_frac   = float(self.solar_output_kw[t]) / self.SOLAR_CAPACITY_KW
+        soc_norm     = ((self.battery_soc_kwh - self.BATTERY_MIN_SOC_KWH)
+                        / (self.BATTERY_MAX_SOC_KWH - self.BATTERY_MIN_SOC_KWH))
+        hour_norm    = float(self.hour_of_day[t]) / 23.0
+        weekday      = float(self.is_weekday[t])
+        diesel_avail = float(self.diesel_available[t])
 
         lp_norms = np.array(
             [float(self.lp_demand_kw[lp][t]) / self._max_lp_demand[lp]
@@ -218,7 +218,7 @@ class GreenfieldEnergyEnv:
                        if price_range > 0.0 else 0.5)
 
         state = np.concatenate([
-            [solar_frac, np.clip(soc_norm, 0.0, 1.0), hour_norm, weekday],
+            [solar_frac, np.clip(soc_norm, 0.0, 1.0), hour_norm, weekday, diesel_avail],
             np.clip(lp_norms, 0.0, 1.0),
             [np.clip(price_norm, 0.0, 1.0)],
         ])
@@ -254,13 +254,13 @@ class GreenfieldEnergyEnv:
         if lp in ("LP1", "LP2", "LP3", "LP4"):
             return True
         if lp == "LP5":
-            return 8 <= hour <= 21
+            return 8 <= hour <= 22
         if lp == "LP6":
-            return 6 <= hour <= 20
+            return 6 <= hour <= 21
         if lp == "LP7":
-            return 6 <= hour <= 19
+            return 6 <= hour <= 20
         if lp == "LP8":
-            return hour >= 18 or hour <= 5
+            return hour >= 18 or hour <= 6
         return False
 
 

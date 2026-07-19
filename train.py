@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from formulas import GreenfieldEnergyEnv
+from configuration import GreenfieldEnergyEnv
 from dqn_agent import DQNAgent
 
 
@@ -108,7 +108,7 @@ def train() -> None:
     os.makedirs("plots",          exist_ok=True)
 
     print("=" * 65)
-    print("  Greenfield University — DQN Training")
+    print("DQN Training")
     print("=" * 65)
     print(f"  Episodes         : {N_EPISODES}")
     print(f"  Target update    : every {TARGET_UPDATE_FREQ} episodes")

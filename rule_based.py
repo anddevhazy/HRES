@@ -13,36 +13,30 @@ class GreenfieldRuleBasedController:
         hour         = int(env.hour_of_day[t])
         solar_kw     = float(env.solar_output_kw[t])
         soc_kwh      = env.battery_soc_kwh
-        diesel_avail = bool(env.diesel_available[t])
         lp_demands   = {lp: float(env.lp_demand_kw[lp][t]) for lp in env.LP_IDS}
 
-        eligible_lps   = env._get_eligible_lps(hour, soc_kwh, solar_kw)
-        eligible_demand = sum(lp_demands.get(lp, 0.0) for lp in eligible_lps)
-
-        priority_lps    = [lp for lp in ("LP1", "LP2", "LP3", "LP4")
-                           if lp in eligible_lps]
-        priority_demand = sum(lp_demands.get(lp, 0.0) for lp in priority_lps)
-
-        depth_kwh          = max(0.0, soc_kwh - env.BATTERY_MIN_SOC_KWH)
-        max_batt_discharge = min(env.BATTERY_MAX_DISCHARGE_KW,
-                                 depth_kwh * env.BATTERY_ETA)
-
-        cond_a    = ((solar_kw + max_batt_discharge) < priority_demand
-                     and priority_demand > 0.0)
-        cond_b    = (soc_kwh < env.DIESEL_EMERGENCY_SOC_KWH
-                     and solar_kw < env.DIESEL_EMERGENCY_SOLAR_KW)
-        diesel_on = diesel_avail and (cond_a or cond_b)
-
-        if solar_kw >= eligible_demand:
-            if soc_kwh < env.BATTERY_MAX_SOC_KWH - 1.0:
-                batt_mode = 0
-            else:
-                batt_mode = 1
+        if hour >= 18 or hour <= 6:
+            order = ["LP1", "LP8", "LP4", "LP2", "LP3", "LP5", "LP6", "LP7"]
         else:
-            if soc_kwh > env.BATTERY_MIN_SOC_KWH + 1.0:
-                batt_mode = 2
-            else:
-                batt_mode = 1
+            order = ["LP1", "LP2", "LP3", "LP4", "LP5", "LP6", "LP7", "LP8"]
+
+        eligible = [lp for lp in order if env._lp_in_time_window(lp, hour)]
+        eligible_demand = sum(lp_demands.get(lp, 0.0) for lp in eligible)
+
+        pre_charge_kw = solar_kw * 0.10
+        avail_for_loads = solar_kw - pre_charge_kw
+
+        if avail_for_loads >= eligible_demand:
+            batt_mode = 0
+        else:
+            batt_mode = 2
+
+        WEAK_DIESEL_SOC  = 125.0   # kWh
+        WEAK_DIESEL_SOLAR = 10.0   # kW
+        diesel_avail = bool(env.diesel_available[t])
+        diesel_on = (diesel_avail
+                     and soc_kwh <= WEAK_DIESEL_SOC
+                     and solar_kw < WEAK_DIESEL_SOLAR)
 
         return env._action_from_decisions(int(diesel_on), batt_mode)
 
@@ -111,7 +105,7 @@ if __name__ == "__main__":
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from formulas import GreenfieldEnergyEnv
+    from configuration import GreenfieldEnergyEnv
 
     env        = GreenfieldEnergyEnv()
     controller = GreenfieldRuleBasedController(env)

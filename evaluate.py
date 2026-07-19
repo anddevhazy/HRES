@@ -7,9 +7,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import torch
 
-from formulas import GreenfieldEnergyEnv
+from configuration import GreenfieldEnergyEnv
 from dqn_agent import DQNAgent
-from weak_rule_based import WeakGreenfieldEnv, WeakRuleBasedController
+from rule_based import GreenfieldRuleBasedController
 
 
 def run_episode(env: GreenfieldEnergyEnv, policy_fn) -> dict:
@@ -141,7 +141,7 @@ def save_plots(dqn: dict, rule: dict, ceiling: dict,
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    labels  = ["Weak Rule-Based\n(baseline)", "DQN Agent\n(this work)"]
+    labels  = ["Rule-Based\n(baseline)", "DQN Agent\n(this work)"]
     values  = [rule["energy_reliability"], dqn["energy_reliability"]]
     colors  = ["#e07b54", "#4c9be8"]
 
@@ -292,13 +292,13 @@ def main():
         lambda state, env: agent.select_action(state)
     )
 
-    weak_env = WeakGreenfieldEnv()
-    weak_controller = WeakRuleBasedController(weak_env)
+    rule_env = GreenfieldEnergyEnv()
+    rule_controller = GreenfieldRuleBasedController(rule_env)
 
     print("[2/3] Conventional rule-based controller …")
     rule_results = run_episode(
-        weak_env,
-        lambda state, env: weak_controller.select_action(state, env)
+        rule_env,
+        lambda state, env: rule_controller.select_action(state, env)
     )
 
     print("[3/3] MAX SUPPLY (hardware ceiling) …")
@@ -307,7 +307,7 @@ def main():
     print_comparison(dqn_results, rule_results, ceiling_results)
 
     print("Saving plots …")
-    save_plots(dqn_results, rule_results, ceiling_results, weak_env, args.plots_dir)
+    save_plots(dqn_results, rule_results, ceiling_results, rule_env, args.plots_dir)
     print(f"\n  Done. All plots written to {args.plots_dir}/\n")
 
 

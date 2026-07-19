@@ -146,7 +146,7 @@ class DQNAgent:
 
 
 if __name__ == "__main__":
-    from formulas import GreenfieldEnergyEnv
+    from configuration import GreenfieldEnergyEnv
 
     env   = GreenfieldEnergyEnv()
     agent = DQNAgent(state_size=env.state_size, action_size=env.action_size)
