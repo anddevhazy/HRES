@@ -81,42 +81,42 @@
       "fuel_cost": false
     }
   },
-  "controller_type": "Weak rule-based (5 documented flaws)",
+  "controller_type": "Rule-based ",
   "controller_rules": [
     {
       "rule_id": "R1",
       "name": "Solar-first dispatch",
-      "description": "Solar PV output is the primary source. It is always used first."
+      "description": "Solar PV is always used first to serve loads and charge the battery."
     },
     {
       "rule_id": "R2",
-      "name": "[FLAW F1] Battery pre-charge bias",
-      "description": "The controller diverts 10% of solar output to charge the battery BEFORE serving any load. This reduces power available to loads during daylight and causes unnecessary shedding."
+      "name": "Battery pre-charge bias",
+      "description": "10% of solar output is diverted to charge the battery BEFORE serving any load, reducing power available to loads during daylight hours."
     },
     {
       "rule_id": "R3",
-      "name": "[FLAW F2] Late diesel trigger",
-      "description": "The diesel generator only starts when battery SOC \u2264 125 kWh (just above the 120 kWh hard floor) AND solar output < 10 kW. This is far too late \u2014 by the time these conditions are met, most loads have already been shed for hours."
+      "name": "[Late diesel trigger",
+      "description": "Diesel only starts when SOC \u2264 125 kWh AND solar < 10 kW \u2014 far too late, causing prolonged shedding before diesel intervenes."
     },
     {
       "rule_id": "R4",
-      "name": "[FLAW F3] High load-shedding threshold",
-      "description": "A load point is only served if the available power covers at least 80% of its current demand. This causes aggressive shedding even when modest additional power (e.g. earlier diesel dispatch) could have served the load."
+      "name": "High load-shedding threshold",
+      "description": "A load point is dropped if available power < 80% of its demand, causing over-aggressive shedding even with a modest shortfall."
     },
     {
       "rule_id": "R5",
-      "name": "[FLAW F4] No night priority reordering",
-      "description": "The dispatch order (LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7 > LP8) is the same day and night. LP8 (Street Lighting) is always last priority, causing campus safety lighting to go unserved even when enough power is available."
+      "name": "Night priority  ( \u2014 ACTIVE)",
+      "description": "At night (18:00\u201306:00), LP8 (Street Lighting) is elevated to priority-2: LP1 > LP8 > LP4 > LP2 > LP3 > LP5 > LP6 > LP7. During the day: LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7 > LP8."
     },
     {
       "rule_id": "R6",
-      "name": "[FLAW F5] Diesel always dispatched at full capacity",
-      "description": "When the diesel starts, it always runs at full 150 kW regardless of the actual shortfall. This wastes fuel and causes battery overcharge (surplus cannot always be absorbed), leading to inefficient operation."
+      "name": "Diesel always dispatched at full capacity",
+      "description": "When diesel starts, it always runs at full 150 kW regardless of actual shortfall, wasting fuel."
     },
     {
       "rule_id": "R7",
       "name": "Battery discharge",
-      "description": "Battery discharges to cover the deficit between solar output (after pre-charge) and total load demand, up to 200 kW and down to 120 kWh SOC floor."
+      "description": "Battery discharges to cover deficit between solar (after pre-charge) and load demand, up to 200 kW, down to 120 kWh SOC floor."
     },
     {
       "rule_id": "R8",
@@ -125,10 +125,10 @@
     }
   ],
   "reliability_metric": "Energy served / Energy demanded (annual)",
-  "baseline_reliability_pct": 70.51,
+  "baseline_reliability_pct": 70.29,
   "total_annual_demand_kwh": 1880819.8,
-  "total_annual_delivered_kwh": 1326248.2,
-  "total_unserved_energy_kwh": 554571.6,
+  "total_annual_delivered_kwh": 1322018.2,
+  "total_unserved_energy_kwh": 558801.6,
   "dqn_target_reliability_pct": 90.0,
   "dataset_info": {
     "total_hours": 8760,

@@ -13,30 +13,30 @@ class GreenfieldRuleBasedController:
         hour         = int(env.hour_of_day[t])
         solar_kw     = float(env.solar_output_kw[t])
         soc_kwh      = env.battery_soc_kwh
-        lp_demands   = {lp: float(env.lp_demand_kw[lp][t]) for lp in env.LP_IDS}
+        diesel_avail = bool(env.diesel_available[t])
+
+        pre_charge_kw   = solar_kw * 0.10
+        avail_for_loads = solar_kw - pre_charge_kw
 
         if hour >= 18 or hour <= 6:
             order = ["LP1", "LP8", "LP4", "LP2", "LP3", "LP5", "LP6", "LP7"]
         else:
             order = ["LP1", "LP2", "LP3", "LP4", "LP5", "LP6", "LP7", "LP8"]
-
         eligible = [lp for lp in order if env._lp_in_time_window(lp, hour)]
-        eligible_demand = sum(lp_demands.get(lp, 0.0) for lp in eligible)
+        eligible_demand = sum(float(env.lp_demand_kw[lp][t]) for lp in eligible)
 
-        pre_charge_kw = solar_kw * 0.10
-        avail_for_loads = solar_kw - pre_charge_kw
-
-        if avail_for_loads >= eligible_demand:
-            batt_mode = 0
+  
+        if avail_for_loads >= eligible_demand * 0.80:
+            batt_mode = 0  
         else:
-            batt_mode = 2
-
-        WEAK_DIESEL_SOC  = 125.0   # kWh
-        WEAK_DIESEL_SOLAR = 10.0   # kW
-        diesel_avail = bool(env.diesel_available[t])
-        diesel_on = (diesel_avail
-                     and soc_kwh <= WEAK_DIESEL_SOC
-                     and solar_kw < WEAK_DIESEL_SOLAR)
+            batt_mode = 2   
+        WEAK_DIESEL_SOC   = 125.0   
+        WEAK_DIESEL_SOLAR = 10.0   
+        diesel_on = (
+            diesel_avail
+            and soc_kwh <= WEAK_DIESEL_SOC
+            and solar_kw < WEAK_DIESEL_SOLAR
+        )
 
         return env._action_from_decisions(int(diesel_on), batt_mode)
 

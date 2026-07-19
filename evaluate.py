@@ -13,7 +13,7 @@ from rule_based import GreenfieldRuleBasedController
 
 
 def run_episode(env: GreenfieldEnergyEnv, policy_fn) -> dict:
-    state = env.reset()
+    state = env.reset(demand_jitter=0.0)
     done  = False
 
     total_demand_kw  = 0.0

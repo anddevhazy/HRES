@@ -19,7 +19,7 @@ class GreenfieldEnergyEnv:
     BATTERY_MAX_SOC_KWH      = 1080.0
     BATTERY_MAX_CHARGE_KW    = 200.0
     BATTERY_MAX_DISCHARGE_KW = 200.0
-    BATTERY_ETA              = 0.9 ** 0.5
+    BATTERY_ETA              = 0.90   
 
     DIESEL_EMERGENCY_SOC_KWH  = 240.0
     DIESEL_EMERGENCY_SOLAR_KW = 30.0
@@ -74,16 +74,29 @@ class GreenfieldEnergyEnv:
 
     @property
     def state_size(self) -> int:
-        return 14
+        return 15   
 
     @property
     def action_size(self) -> int:
         return len(self.ACTION_MAP)
 
 
-    def reset(self) -> np.ndarray:
+    def reset(self, demand_jitter: float = 0.05) -> np.ndarray:
         self.t = 0
         self.battery_soc_kwh = self._initial_soc_kwh
+
+        if demand_jitter > 0.0:
+            for lp in self.LP_IDS:
+                noise = np.random.normal(1.0, demand_jitter, self.n_timesteps)
+                noise = np.clip(noise, 1.0 - 3 * demand_jitter, 1.0 + 3 * demand_jitter)
+                self.lp_demand_kw[lp] = np.clip(
+                    self._base_lp_demand_kw[lp] * noise,
+                    0.0,
+                    self._max_lp_demand[lp] * 1.2
+                )
+        else:
+            self.lp_demand_kw = {lp: arr.copy() for lp, arr in self._base_lp_demand_kw.items()}
+
         return self._get_state()
 
     def step(self, action: int):
@@ -107,10 +120,7 @@ class GreenfieldEnergyEnv:
 
         if batt_mode == 2:
             solar_deficit = max(0.0, eligible_demand_kw - solar_kw)
-            depth_kwh     = max(0.0, soc_kwh - self.BATTERY_MIN_SOC_KWH)
-            max_from_depth = depth_kwh * self.BATTERY_ETA
             battery_discharge_kw = min(self.BATTERY_MAX_DISCHARGE_KW,
-                                       max_from_depth,
                                        solar_deficit)
         else:
             battery_discharge_kw = 0.0
@@ -146,11 +156,12 @@ class GreenfieldEnergyEnv:
         load_served_kw = sum(lp_served.values())
 
         soc_violated = False
+        _eta_one_way = self.BATTERY_ETA ** 0.5   
         if battery_discharge_kw > 1e-9:
-            draw = battery_discharge_kw / self.BATTERY_ETA
+            draw = battery_discharge_kw / _eta_one_way  
             self.battery_soc_kwh = max(self.BATTERY_MIN_SOC_KWH, soc_kwh - draw)
         if battery_charge_kw > 1e-9:
-            stored = battery_charge_kw * self.BATTERY_ETA
+            stored = battery_charge_kw * _eta_one_way  
             self.battery_soc_kwh = min(self.BATTERY_MAX_SOC_KWH,
                                        self.battery_soc_kwh + stored)
         if (self.battery_soc_kwh <= self.BATTERY_MIN_SOC_KWH + 1e-3
@@ -203,7 +214,9 @@ class GreenfieldEnergyEnv:
         solar_frac   = float(self.solar_output_kw[t]) / self.SOLAR_CAPACITY_KW
         soc_norm     = ((self.battery_soc_kwh - self.BATTERY_MIN_SOC_KWH)
                         / (self.BATTERY_MAX_SOC_KWH - self.BATTERY_MIN_SOC_KWH))
-        hour_norm    = float(self.hour_of_day[t]) / 23.0
+        hour_rad     = 2.0 * np.pi * float(self.hour_of_day[t]) / 24.0
+        hour_sin     = np.sin(hour_rad)   
+        hour_cos     = np.cos(hour_rad)
         weekday      = float(self.is_weekday[t])
         diesel_avail = float(self.diesel_available[t])
 
@@ -218,7 +231,7 @@ class GreenfieldEnergyEnv:
                        if price_range > 0.0 else 0.5)
 
         state = np.concatenate([
-            [solar_frac, np.clip(soc_norm, 0.0, 1.0), hour_norm, weekday, diesel_avail],
+            [solar_frac, np.clip(soc_norm, 0.0, 1.0), hour_sin, hour_cos, weekday, diesel_avail],
             np.clip(lp_norms, 0.0, 1.0),
             [np.clip(price_norm, 0.0, 1.0)],
         ])
@@ -236,10 +249,11 @@ class GreenfieldEnergyEnv:
         self.is_weekday       = src["is_weekday"].to_numpy(dtype=np.float32)
         self._initial_soc_kwh = float(src["battery_soc_kwh"].iloc[0])
 
-        self.lp_demand_kw = {
+        self._base_lp_demand_kw = {
             lp: load[f"{lp}_demand_kw"].to_numpy(dtype=np.float64)
             for lp in self.LP_IDS
         }
+        self.lp_demand_kw = {lp: arr.copy() for lp, arr in self._base_lp_demand_kw.items()}
 
 
     def _get_eligible_lps(self, hour: int, soc_kwh: float, solar_kw: float) -> set:
