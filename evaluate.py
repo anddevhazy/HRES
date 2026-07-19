@@ -34,8 +34,17 @@ def run_episode(env: GreenfieldEnergyEnv, policy_fn) -> dict:
     reward_hist  = []
 
     while not done:
-        action = policy_fn(state, env)
-        state, reward, done, info = env.step(action)
+        result = policy_fn(state, env)
+        if isinstance(result, tuple):
+            action, pre_charge_kw, force_kw = result
+            state, reward, done, info = env.step(
+                action,
+                pre_charge_override_kw=pre_charge_kw,
+                force_diesel_kw=force_kw,
+            )
+        else:
+            action = result
+            state, reward, done, info = env.step(action)
 
         fuel = float(sum(info["fuel_consumed_per_source"].values()))
 
