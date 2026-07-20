@@ -10,49 +10,49 @@
       "id": "LP1",
       "name": "Admin Block",
       "priority": 1,
-      "base_kw": 54.9
+      "base_kw": 45
     },
     {
       "id": "LP2",
       "name": "Lecture Halls",
       "priority": 2,
-      "base_kw": 97.6
+      "base_kw": 80
     },
     {
       "id": "LP3",
       "name": "Research Labs",
       "priority": 3,
-      "base_kw": 73.2
+      "base_kw": 60
     },
     {
       "id": "LP4",
       "name": "Student Hostels",
       "priority": 4,
-      "base_kw": 85.4
+      "base_kw": 70
     },
     {
       "id": "LP5",
       "name": "Library",
       "priority": 5,
-      "base_kw": 36.6
+      "base_kw": 30
     },
     {
       "id": "LP6",
       "name": "Cafeteria",
       "priority": 6,
-      "base_kw": 42.7
+      "base_kw": 35
     },
     {
       "id": "LP7",
       "name": "Sports Complex",
       "priority": 7,
-      "base_kw": 30.5
+      "base_kw": 25
     },
     {
       "id": "LP8",
       "name": "Street Lighting",
       "priority": 8,
-      "base_kw": 18.3
+      "base_kw": 15
     }
   ],
   "n_sources": 3,
@@ -63,12 +63,13 @@
       "fuel_cost": false
     },
     "diesel_generator": {
-      "capacity_kw": 150,
+      "capacity_kw": 110,
       "type": "dispatchable",
       "fuel": "diesel",
       "fuel_cost": true,
       "full_load_fuel_consumption_L_per_hr": 40.0,
-      "min_load_fraction": 0.25
+      "min_load_fraction": 0.25,
+      "note": "Dispatched when solar + battery cannot meet priority load deficit threshold"
     },
     "battery": {
       "capacity_kwh": 1200,
@@ -81,63 +82,120 @@
       "fuel_cost": false
     }
   },
-  "controller_type": "Rule-based ",
   "controller_rules": [
     {
       "rule_id": "R1",
       "name": "Solar-first dispatch",
-      "description": "Solar PV is always used first to serve loads and charge the battery."
+      "description": "Solar PV output is used first to serve active loads and charge the battery. Surplus solar charges the battery at up to 200 kW when SOC < 90% (1,080 kWh)."
     },
     {
       "rule_id": "R2",
-      "name": "Battery pre-charge bias",
-      "description": "10% of solar output is diverted to charge the battery BEFORE serving any load, reducing power available to loads during daylight hours."
+      "name": "Priority dispatch order (day)",
+      "description": "During daytime (07:00\u201317:59): LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7. LP8 is inactive in daylight."
     },
     {
       "rule_id": "R3",
-      "name": "[Late diesel trigger",
-      "description": "Diesel only starts when SOC \u2264 125 kWh AND solar < 10 kW \u2014 far too late, causing prolonged shedding before diesel intervenes."
+      "name": "Priority dispatch order (night)",
+      "description": "During night (18:00\u201306:59): LP1 > LP8 > LP4 > LP2 > LP3 > LP5 > LP6 > LP7. LP8 elevated for campus safety."
     },
     {
       "rule_id": "R4",
-      "name": "High load-shedding threshold",
-      "description": "A load point is dropped if available power < 80% of its demand, causing over-aggressive shedding even with a modest shortfall."
+      "name": "Load shedding threshold",
+      "description": "LP2\u2013LP7 are served only if at least 50% of their current demand can be met from available power. LP1 and LP8 have a 0% threshold."
     },
     {
       "rule_id": "R5",
-      "name": "Night priority  ( \u2014 ACTIVE)",
-      "description": "At night (18:00\u201306:00), LP8 (Street Lighting) is elevated to priority-2: LP1 > LP8 > LP4 > LP2 > LP3 > LP5 > LP6 > LP7. During the day: LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7 > LP8."
+      "name": "Battery discharge rule",
+      "description": "The controller discharges the battery only when SOC exceeds 50% (600 kWh). Below this level, the battery is held in reserve and not discharged, even if loads are unsupplied. This conservative threshold is a known limitation of the rule-based approach."
     },
     {
       "rule_id": "R6",
-      "name": "Diesel always dispatched at full capacity",
-      "description": "When diesel starts, it always runs at full 150 kW regardless of actual shortfall, wasting fuel."
+      "name": "Battery charge rule",
+      "description": "Battery charges on any solar surplus above total eligible load demand, up to 200 kW charge rate."
     },
     {
       "rule_id": "R7",
-      "name": "Battery discharge",
-      "description": "Battery discharges to cover deficit between solar (after pre-charge) and load demand, up to 200 kW, down to 120 kWh SOC floor."
+      "name": "Diesel start condition",
+      "description": "The diesel generator starts only when the shortfall in priority load supply (LP1\u2013LP4) exceeds 30% of total priority demand. This reactive threshold means the generator is started after load shedding has already begun, rather than pre-emptively."
     },
     {
       "rule_id": "R8",
+      "name": "Diesel output sizing",
+      "description": "When started, diesel is dispatched at the maximum of the calculated shortfall and 40% minimum load (60 kW), up to 150 kW rated capacity."
+    },
+    {
+      "rule_id": "R9",
+      "name": "Diesel fuel cost accounting",
+      "description": "Fuel consumption follows a linear derating model: L = 10 + 30 \u00d7 (P / 150) litres/hr. Fuel price (NGN/litre) varies hourly with seasonal trends and periodic supply shocks."
+    },
+    {
+      "rule_id": "R10",
       "name": "Time-window restrictions",
       "description": "LP5 (Library): 08:00\u201322:00. LP6 (Cafeteria): 06:00\u201321:00. LP7 (Sports): 06:00\u201320:00. LP8 (Street Lighting): 18:00\u201306:00."
+    },
+    {
+      "rule_id": "R11",
+      "name": "Emergency load shedding",
+      "description": "When battery SOC is at or below the 50% discharge threshold and solar output cannot cover priority loads, LP7 (Sports Complex) is the first load shed. No further automated shedding logic is applied beyond the priority dispatch order."
     }
   ],
-  "reliability_metric": "Energy served / Energy demanded (annual)",
-  "baseline_reliability_pct": 70.29,
-  "total_annual_demand_kwh": 1880819.8,
-  "total_annual_delivered_kwh": 1322018.2,
-  "total_unserved_energy_kwh": 558801.6,
-  "dqn_target_reliability_pct": 90.0,
+  "performance_metrics": {
+    "supply_reliability_pct": 69.9,
+    "total_diesel_fuel_litres": 149692.7,
+    "total_diesel_cost_NGN": 187865760.21,
+    "diesel_operating_hours": 4616,
+    "avg_battery_soc_kwh": 984.2,
+    "note": "These metrics represent the baseline rule-based controller performance against which the DQN agent will be benchmarked."
+  },
   "dataset_info": {
     "total_hours": 8760,
     "year": 2024,
     "timestep": "hourly",
     "files": {
-      "source_availability.csv": "8,760 rows \u00d7 19 cols. Solar, diesel, battery, fuel cost.",
-      "load_demand_and_dispatch.csv": "8,760 rows \u00d7 28 cols. Per-LP powered/demand/effective.",
-      "university_metadata.json": "Full spec, load points, sources, controller rules, reliability."
+      "source_availability.csv": "8,760 rows \u00d7 26 columns. Core: timestamp, hour, hour_of_day, day_of_year, month, is_weekday. Solar: solar_pv_availability_fraction, solar_pv_output_kw. Diesel: diesel_available, diesel_dispatched_kw, diesel_on, diesel_fuel_consumed_litres, diesel_fuel_price_NGN_per_litre, diesel_cost_NGN. Battery: battery_soc_kwh, battery_charge_kw, battery_discharge_kw. Totals: total_generation_kw, total_available_kw. Solar forecasts (realistic noise): solar_forecast_t1h_kw, solar_forecast_t3h_kw, solar_forecast_t6h_kw. Demand forecasts (realistic noise): demand_forecast_t1h_kw, demand_forecast_t3h_kw, demand_forecast_t6h_kw. Fuel tracking: cumulative_daily_fuel_litres.",
+      "load_demand_and_dispatch.csv": "8,760 rows \u00d7 28 columns. For each LP (LP1\u2013LP8): _powered (0/1), _demand_kw (unconstrained demand), _effective_kw (actual power served).",
+      "university_metadata.json": "University profile, load point specs, source specs, controller rules, and baseline performance metrics."
+    },
+    "forecast_methodology": {
+      "solar_forecast": {
+        "horizons": [
+          "t+1h",
+          "t+3h",
+          "t+6h"
+        ],
+        "noise_model": "Multiplicative Gaussian noise on true future values",
+        "relative_error": {
+          "t+1h": "8%",
+          "t+3h": "14%",
+          "t+6h": "22%"
+        },
+        "real_world_equivalent": "Open-Meteo / Solcast NWP solar irradiance API",
+        "MAE_kw": {
+          "t+1h": 6.9,
+          "t+3h": 11.6,
+          "t+6h": 17.7
+        }
+      },
+      "demand_forecast": {
+        "horizons": [
+          "t+1h",
+          "t+3h",
+          "t+6h"
+        ],
+        "noise_model": "Multiplicative Gaussian noise on true future demand",
+        "relative_error": {
+          "t+1h": "5%",
+          "t+3h": "9%",
+          "t+6h": "13%"
+        },
+        "real_world_equivalent": "Historical schedule-based demand model (hour-of-day x day-of-week lookup)",
+        "MAE_kw": {
+          "t+1h": 7.1,
+          "t+3h": 12.6,
+          "t+6h": 18.7
+        }
+      },
+      "note": "Forecast errors are calibrated to published benchmarks for short-term solar irradiance and university building load forecasting. Errors grow with horizon, reflecting real forecast degradation. These forecasts are part of the DQN state space, enabling forward-looking dispatch decisions not available to the rule-based controller baseline."
     }
   }
 }
