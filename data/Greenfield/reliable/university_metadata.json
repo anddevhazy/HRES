@@ -1,0 +1,152 @@
+{
+  "university": {
+    "name": "Greenfield University",
+    "location": "West Africa (tropical, ~7\u00b0N latitude)",
+    "description": "A mid-sized off-grid university campus with 8 load points, powered by a 500 kW solar PV array, a 150 kW diesel generator, and a 1,200 kWh battery bank."
+  },
+  "n_load_points": 8,
+  "load_points": [
+    {
+      "id": "LP1",
+      "name": "Admin Block",
+      "priority": 1,
+      "base_kw": 45
+    },
+    {
+      "id": "LP2",
+      "name": "Lecture Halls",
+      "priority": 2,
+      "base_kw": 80
+    },
+    {
+      "id": "LP3",
+      "name": "Research Labs",
+      "priority": 3,
+      "base_kw": 60
+    },
+    {
+      "id": "LP4",
+      "name": "Student Hostels",
+      "priority": 4,
+      "base_kw": 70
+    },
+    {
+      "id": "LP5",
+      "name": "Library",
+      "priority": 5,
+      "base_kw": 30
+    },
+    {
+      "id": "LP6",
+      "name": "Cafeteria",
+      "priority": 6,
+      "base_kw": 35
+    },
+    {
+      "id": "LP7",
+      "name": "Sports Complex",
+      "priority": 7,
+      "base_kw": 25
+    },
+    {
+      "id": "LP8",
+      "name": "Street Lighting",
+      "priority": 8,
+      "base_kw": 15
+    }
+  ],
+  "n_sources": 3,
+  "sources": {
+    "solar_pv": {
+      "capacity_kw": 500,
+      "type": "renewable",
+      "fuel_cost": false
+    },
+    "diesel_generator": {
+      "capacity_kw": 150,
+      "type": "dispatchable",
+      "fuel": "diesel",
+      "fuel_cost": true,
+      "full_load_fuel_consumption_L_per_hr": 40.0,
+      "min_load_fraction": 0.25,
+      "note": "Dispatched only when solar + battery cannot meet priority loads"
+    },
+    "battery": {
+      "capacity_kwh": 1200,
+      "min_soc_kwh": 120,
+      "max_soc_kwh": 1080,
+      "max_charge_kw": 200,
+      "max_discharge_kw": 200,
+      "roundtrip_efficiency": 0.9,
+      "type": "storage",
+      "fuel_cost": false
+    }
+  },
+  "controller_rules": [
+    {
+      "rule_id": "R1",
+      "name": "Solar-first dispatch",
+      "description": "Solar PV output is always used first to serve active loads and charge the battery. It is never curtailed unless the battery is full and all loads are met."
+    },
+    {
+      "rule_id": "R2",
+      "name": "Priority dispatch order (day)",
+      "description": "During daytime (07:00\u201317:59): LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7. LP8 is inactive in daylight."
+    },
+    {
+      "rule_id": "R3",
+      "name": "Priority dispatch order (night)",
+      "description": "During night (18:00\u201306:59): LP1 > LP8 > LP4 > LP2 > LP3 > LP5 > LP6 > LP7. LP8 elevated for campus safety."
+    },
+    {
+      "rule_id": "R4",
+      "name": "Load shedding threshold",
+      "description": "LP2\u2013LP7 are served only if at least 50% of their current demand can be met. LP1 and LP8 have a 0% threshold (always served if any power available)."
+    },
+    {
+      "rule_id": "R5",
+      "name": "Battery charges on surplus",
+      "description": "If solar output exceeds total eligible load demand AND SOC < 90% (1,080 kWh), surplus charges the battery at up to 200 kW (90% round-trip efficiency)."
+    },
+    {
+      "rule_id": "R6",
+      "name": "Battery discharges on deficit",
+      "description": "If solar output < total eligible load demand AND SOC > 10% (120 kWh), battery discharges at up to 200 kW to cover the shortfall before diesel is considered."
+    },
+    {
+      "rule_id": "R7",
+      "name": "Diesel start condition",
+      "description": "Diesel generator starts if: (a) solar + battery discharge cannot cover the combined demand of priority loads LP1\u2013LP4, OR (b) battery SOC < 240 kWh (20%) and solar output < 30 kW. Diesel is not started for non-priority loads (LP5\u2013LP8) alone."
+    },
+    {
+      "rule_id": "R8",
+      "name": "Diesel output sizing",
+      "description": "When started, the diesel generator is dispatched to cover the exact shortfall, subject to a minimum loading of 25% (37.5 kW) and a maximum of 150 kW."
+    },
+    {
+      "rule_id": "R9",
+      "name": "Diesel fuel cost accounting",
+      "description": "Fuel consumption (litres/hr) follows a linear derating model: L = L_idle + (L_full - L_idle) \u00d7 (P / P_max), where L_idle = 10 L/hr (25% of full-load rate). Fuel price (NGN/litre) varies hourly with seasonal trends and supply shocks."
+    },
+    {
+      "rule_id": "R10",
+      "name": "Time-window restrictions",
+      "description": "LP5 (Library): 08:00\u201322:00. LP6 (Cafeteria): 06:00\u201321:00. LP7 (Sports): 06:00\u201320:00. LP8 (Street Lighting): 18:00\u201306:00."
+    },
+    {
+      "rule_id": "R11",
+      "name": "Emergency battery protection",
+      "description": "If SOC < 240 kWh (20%) AND solar output < 30 kW, LP7 (Sports Complex) is immediately shed. LP8 (Street Lighting) is exempt from emergency shedding as it is safety infrastructure."
+    }
+  ],
+  "dataset_info": {
+    "total_hours": 8760,
+    "year": 2024,
+    "timestep": "hourly",
+    "files": {
+      "source_availability.csv": "8,760 rows \u00d7 19 columns. Solar PV output, diesel availability/dispatch/fuel/cost, battery SOC/charge/discharge, total generation and available power.",
+      "load_demand_and_dispatch.csv": "8,760 rows \u00d7 28 columns. For each LP (LP1\u2013LP8): _powered (0/1), _demand_kw (unconstrained), _effective_kw (actual served).",
+      "university_metadata.json": "University profile, load point specs, source specs, controller rules."
+    }
+  }
+}

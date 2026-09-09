@@ -1,0 +1,143 @@
+{
+  "university": {
+    "name": "Greenfield University",
+    "location": "West Africa (tropical, ~7\u00b0N latitude)",
+    "description": "A mid-sized off-grid university campus with 8 load points, powered by a 500 kW solar PV array, a 150 kW diesel generator, and a 1,200 kWh battery bank."
+  },
+  "n_load_points": 8,
+  "load_points": [
+    {
+      "id": "LP1",
+      "name": "Admin Block",
+      "priority": 1,
+      "base_kw": 54.9
+    },
+    {
+      "id": "LP2",
+      "name": "Lecture Halls",
+      "priority": 2,
+      "base_kw": 97.6
+    },
+    {
+      "id": "LP3",
+      "name": "Research Labs",
+      "priority": 3,
+      "base_kw": 73.2
+    },
+    {
+      "id": "LP4",
+      "name": "Student Hostels",
+      "priority": 4,
+      "base_kw": 85.4
+    },
+    {
+      "id": "LP5",
+      "name": "Library",
+      "priority": 5,
+      "base_kw": 36.6
+    },
+    {
+      "id": "LP6",
+      "name": "Cafeteria",
+      "priority": 6,
+      "base_kw": 42.7
+    },
+    {
+      "id": "LP7",
+      "name": "Sports Complex",
+      "priority": 7,
+      "base_kw": 30.5
+    },
+    {
+      "id": "LP8",
+      "name": "Street Lighting",
+      "priority": 8,
+      "base_kw": 18.3
+    }
+  ],
+  "n_sources": 3,
+  "sources": {
+    "solar_pv": {
+      "capacity_kw": 500,
+      "type": "renewable",
+      "fuel_cost": false
+    },
+    "diesel_generator": {
+      "capacity_kw": 150,
+      "type": "dispatchable",
+      "fuel": "diesel",
+      "fuel_cost": true,
+      "full_load_fuel_consumption_L_per_hr": 40.0,
+      "min_load_fraction": 0.25
+    },
+    "battery": {
+      "capacity_kwh": 1200,
+      "min_soc_kwh": 120,
+      "max_soc_kwh": 1080,
+      "max_charge_kw": 200,
+      "max_discharge_kw": 200,
+      "roundtrip_efficiency": 0.9,
+      "type": "storage",
+      "fuel_cost": false
+    }
+  },
+  "controller_type": "Weak rule-based (5 documented flaws)",
+  "controller_rules": [
+    {
+      "rule_id": "R1",
+      "name": "Solar-first dispatch",
+      "description": "Solar PV output is the primary source. It is always used first."
+    },
+    {
+      "rule_id": "R2",
+      "name": "[FLAW F1] Battery pre-charge bias",
+      "description": "The controller diverts 10% of solar output to charge the battery BEFORE serving any load. This reduces power available to loads during daylight and causes unnecessary shedding."
+    },
+    {
+      "rule_id": "R3",
+      "name": "[FLAW F2] Late diesel trigger",
+      "description": "The diesel generator only starts when battery SOC \u2264 125 kWh (just above the 120 kWh hard floor) AND solar output < 10 kW. This is far too late \u2014 by the time these conditions are met, most loads have already been shed for hours."
+    },
+    {
+      "rule_id": "R4",
+      "name": "[FLAW F3] High load-shedding threshold",
+      "description": "A load point is only served if the available power covers at least 80% of its current demand. This causes aggressive shedding even when modest additional power (e.g. earlier diesel dispatch) could have served the load."
+    },
+    {
+      "rule_id": "R5",
+      "name": "[FLAW F4] No night priority reordering",
+      "description": "The dispatch order (LP1 > LP2 > LP3 > LP4 > LP5 > LP6 > LP7 > LP8) is the same day and night. LP8 (Street Lighting) is always last priority, causing campus safety lighting to go unserved even when enough power is available."
+    },
+    {
+      "rule_id": "R6",
+      "name": "[FLAW F5] Diesel always dispatched at full capacity",
+      "description": "When the diesel starts, it always runs at full 150 kW regardless of the actual shortfall. This wastes fuel and causes battery overcharge (surplus cannot always be absorbed), leading to inefficient operation."
+    },
+    {
+      "rule_id": "R7",
+      "name": "Battery discharge",
+      "description": "Battery discharges to cover the deficit between solar output (after pre-charge) and total load demand, up to 200 kW and down to 120 kWh SOC floor."
+    },
+    {
+      "rule_id": "R8",
+      "name": "Time-window restrictions",
+      "description": "LP5 (Library): 08:00\u201322:00. LP6 (Cafeteria): 06:00\u201321:00. LP7 (Sports): 06:00\u201320:00. LP8 (Street Lighting): 18:00\u201306:00."
+    }
+  ],
+  "reliability_metric": "Energy served / Energy demanded (annual)",
+  "baseline_reliability_pct": 70.51,
+  "total_annual_demand_kwh": 1880819.8,
+  "total_annual_delivered_kwh": 1326248.2,
+  "total_unserved_energy_kwh": 554571.6,
+  "dqn_target_reliability_pct": 90.0,
+  "dataset_info": {
+    "total_hours": 8760,
+    "year": 2024,
+    "timestep": "hourly",
+    "files": {
+      "source_availability.csv": "8,760 rows \u00d7 19 cols. Solar, diesel, battery, fuel cost.",
+      "load_demand_and_dispatch.csv": "8,760 rows \u00d7 28 cols. Per-LP powered/demand/effective.",
+      "university_metadata.json": "Full spec, load points, sources, controller rules, reliability."
+    }
+  }
+}
